@@ -1,0 +1,24 @@
+machine:
+    python:
+        version: 3.5.1
+    environment:
+        DB_NAME: circle_test
+        DB_USER: ubuntu
+        DB_HOST: 127.0.0.1
+    services:
+        - postgresql
+        - docker
+
+dependencies:
+    post:
+        - docker build --tag $AWS_ECR_ENDPOINT.dkr.ecr.us-east-1.amazonaws.com/cognoma-core-service:$CIRCLE_SHA1 .
+        - docker build --file config/prod/Dockerfile_nginx --tag $AWS_ECR_ENDPOINT.dkr.ecr.us-east-1.amazonaws.com/cognoma-nginx:$CIRCLE_SHA1 .
+
+deployment:
+    production:
+        branch: master
+        commands:
+            - chmod +x ecr_push.sh ecs_deploy.sh
+            - ./ecr_push.sh
+            - ./ecs_deploy.sh --timeout 180 --cluster $AWS_CLUSTER_NAME --service-name $AWS_CORE_SERVICE_NAME --image $AWS_ECR_ENDPOINT.dkr.ecr.us-east-1.amazonaws.com/cognoma-core-service:$CIRCLE_SHA1
+            - ./ecs_deploy.sh --timeout 180 --cluster $AWS_CLUSTER_NAME --service-name $AWS_NGINX_SERVICE_NAME --image $AWS_ECR_ENDPOINT.dkr.ecr.us-east-1.amazonaws.com/cognoma-nginx:$CIRCLE_SHA1

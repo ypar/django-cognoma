@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/1.9/ref/settings/
 """
 
 import os
+import sys
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -19,60 +20,70 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/1.9/howto/deployment/checklist/
 
+# The warning below is usually correct, but we do not use this secret key in this project
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'x!w(6=d6#)yl0ne8yhv#2+*+_nk7vf0#peh4hehg$&83fp^u01'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'x!w(6=d6#)yl0ne8yhv#2+*+_nk7vf0#peh4hehg$&83fp^u01')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
+TESTING_MODE = 'test' in sys.argv
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [os.getenv('DJANGO_HOST', '*')]
 
+# Enables Swagger to correctly set base URL in production to https://api.cognoma.org
+USE_X_FORWARDED_HOST = not DEBUG
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_HOST', 'api.cognoma.org') if not DEBUG else None
 
 # Application definition
 
-INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
+DJANGO_APPS = [
     'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
+    'django.contrib.postgres',
     'django.contrib.staticfiles',
-    'rest_framework',
 ]
 
+THIRD_PARTY_APPS = [
+    'rest_framework',
+    'django_ses',
+    'storages',
+    'rest_framework_swagger'
+]
+
+LOCAL_APPS = [
+    'api.apps.ApiConfig',
+]
+
+INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+
 REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAdminUser',),
-    'PAGE_SIZE': 10
+    'UNAUTHENTICATED_USER': None,
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
+    'PAGE_SIZE': 100,
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'api.auth.CognomaAuthentication',
+    ),
+    'DEFAULT_RENDERER_CLASSES': (
+        # JSON as primary renderer for API functionality
+        'rest_framework.renderers.JSONRenderer',
+        # Support HTML / web browsable renderer for interacting with API
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ),
+}
+
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'api_key': {
+            'type': 'apiKey',
+            'in': 'header',
+            'name': 'Authorization'
+        }
+    },
 }
 
 MIDDLEWARE_CLASSES = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.auth.middleware.SessionAuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
 ROOT_URLCONF = 'cognoma_site.urls'
-
-TEMPLATES = [
-    {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
-            ],
-        },
-    },
-]
 
 WSGI_APPLICATION = 'cognoma_site.wsgi.application'
 
@@ -82,30 +93,30 @@ WSGI_APPLICATION = 'cognoma_site.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DB_NAME', 'postgres'),
+        'USER': os.getenv('DB_USER', 'postgres'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
+        'HOST': os.getenv('DB_HOST', 'core_db'),
+        'PORT': os.getenv('DB_PORT', '5432')
     }
 }
 
+dev_pub_key = """
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5knVYXDKNZAZ36TAo2S2
+it2PkkzlulB8jlLXIo9fOd6NV/v1gp3AUb3yz8otAa9lV5DKQvGUhkVe3dhfHNPv
+nL1w+x/4evi6qXnvbuJ+vlNcaJrSWFAvx8CFSRfUMnyACT7WDwkJZFYYWzTTBhzZ
+fE9D4/DtyrHhZFiB8xjAUbVmBO6f7zwp41Ehr11s5SokweYytwQy38AFvwGUOM6P
+AeN+7bMBi4PfTr4Y4VN/93OBckj4Dfe6AEtq31Z5Urh/e/+zaixbsmenAR1hvC6Z
+34+qca3WMUIZjdeIny4XP0xhzbZNP66tNqUBkJg/fkhKVEeFMHaQ7giBTtqMnXPz
+6wIDAQAB
+-----END PUBLIC KEY-----
+"""
+# SECURITY WARNING: change this to the prod public key!!
+JWT_PUB_KEY = os.getenv('JWT_PUB_KEY', dev_pub_key)
 
-# Password validation
-# https://docs.djangoproject.com/en/1.9/ref/settings/#auth-password-validators
-
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
-
+AUTH_TOKEN = os.getenv('AUTH_TOKEN', 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzZXJ2aWNlIjoiY29yZSJ9.HHlbWMjo-Y__DGV0DAiCY7u85FuNtY8wpovcZ9ga-oCsLdM2H5iVSz1vKiWK8zxl7dSYltbnyTNMxXO2cDS81hr4ohycr7YYg5CaE5sA5id73ab5T145XEdF5X_HXoeczctGq7X3x9QYSn7O1fWJbPWcIrOCs6T2DrySsYgjgdAAnWnKedy_dYWJ0YtHY1bXH3Y7T126QqVlQ9ylHk6hmFMCtxMPbuAX4YBJsxwjWpMDpe13xbaU0Uqo5N47a2_vi0XzQ_tzH5esLeFDl236VqhHRTIRTKhPTtRbQmXXy1k-70AU1FJewVrQddxbzMXJLFclStIdG_vW1dWdqhh-hQ')
 
 # Internationalization
 # https://docs.djangoproject.com/en/1.9/topics/i18n/
@@ -120,8 +131,36 @@ USE_L10N = True
 
 USE_TZ = True
 
+TEST_RUNNER = 'cognoma_site.test_runner.TemporaryMediaTestSuiteRunner'
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/1.9/howto/static-files/
+# Extra static assets that aren't tied to an app
+STATICFILES_DIRS = [
+]
 
-STATIC_URL = '/static/'
+# AWS
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+
+# django-ses
+EMAIL_BACKEND = 'django_ses.SESBackend'
+FROM_EMAIL = 'noreply@cognoma.org'
+AWS_SES_RETURN_PATH = os.getenv('AWS_SES_RETURN_PATH')
+
+# django-storages
+AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
+AWS_S3_CUSTOM_DOMAIN = '{bucket_name}.s3.amazonaws.com'.format(bucket_name=AWS_STORAGE_BUCKET_NAME)
+
+if DEBUG or TESTING_MODE:
+    MEDIA_ROOT = 'files/media'
+    STATIC_ROOT = 'files/static'
+    STATIC_URL = '/static/'
+else:
+    STATIC_URL = "https://{domain}/".format(domain=AWS_S3_CUSTOM_DOMAIN)
+    STATICFILES_LOCATION = 'static'
+    STATICFILES_STORAGE = 'cognoma_site.custom_storages.StaticStorage'
+    STATIC_URL = 'https://{domain}/{location}/'.format(domain=AWS_S3_CUSTOM_DOMAIN, location=STATICFILES_LOCATION)
+
+    MEDIAFILES_LOCATION = 'media'
+    MEDIA_URL = 'https://{domain}/{location}/'.format(domain=AWS_S3_CUSTOM_DOMAIN, location=MEDIAFILES_LOCATION)
+    DEFAULT_FILE_STORAGE = 'cognoma_site.custom_storages.MediaStorage'
+

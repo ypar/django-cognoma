@@ -1,0 +1,21 @@
+version: '2'
+services:
+  core_db:
+    image: postgres
+  core:
+    build: .
+    entrypoint: ./scripts/run_dev.sh
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    depends_on:
+      - core_db
+  nginx:
+    build:
+      context: .
+      dockerfile: config/dev/Dockerfile_nginx
+    ports:
+      - "8080:80"
+    depends_on:
+      - core
